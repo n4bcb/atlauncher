@@ -128,13 +128,17 @@ media_check() {
 }
 
 helpers() {
-  setsid sh "$DATA/apps-watch.sh" </dev/null >/dev/null 2>&1 &
-  setsid sh "$DATA/home-redirect.sh" </dev/null >/dev/null 2>&1 &
+  for h in apps-watch home-redirect; do
+    systemctl reset-failed "atlauncher-$h.service" 2>/dev/null
+    systemd-run --unit="atlauncher-$h" --no-block sh "$DATA/$h.sh" >/dev/null 2>&1 ||
+      { setsid sh "$DATA/$h.sh" </dev/null >/dev/null 2>&1 & }
+  done
 }
 
 # Each helper runs in its own session (setsid), so its whole process group is stopped: killing only the shell left
 # its luna-send subscription running, holding the helper's lock, and a restarted helper exited at once.
 helpers_off() {
+  systemctl stop atlauncher-apps-watch.service atlauncher-home-redirect.service 2>/dev/null
   for p in /proc/[0-9]*; do
     c=$(tr '\0' ' ' 2>/dev/null < "$p/cmdline") || continue
     case "$c" in "sh $DATA/apps-watch.sh"*|"sh $DATA/home-redirect.sh"*) kill -- "-${p#/proc/}" 2>/dev/null; kill "${p#/proc/}" 2>/dev/null ;; esac
